@@ -1,5 +1,6 @@
-
+PyPDF2
+python-dotenv
+langchain
+langchain-community
+openai
 streamlit
-chromadb
-duckdb
-pypdf2
