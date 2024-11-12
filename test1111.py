@@ -3,6 +3,7 @@ import re
 import streamlit as st
 import openai
 import PyPDF2
+import hmac
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -23,7 +24,37 @@ st.set_page_config(page_title="SOPhia", page_icon="🤵‍♀️")
 st.title("📄 SOP handling intelligent agent 🤵‍♀️")
 
 # Predefined directory to load PDF files
-PREDEFINED_DIRECTORY =os.path.join(os.getcwd(), "combined")# Replace with the actual path
+PREDEFINED_DIRECTORY = "/Users/aidenzf/Documents/GitHub/document-qa-test/combined"  # Replace with the actual path
+
+st.set_page_config(page_title="SOPhia", page_icon="🤵‍♀️")
+st.title("📄 SOP handling intelligent agent 🤵‍♀️")
+def check_password():
+    """Returns `True` if the user had the correct password."""
+
+    def password_entered():
+        """Checks whether a password entered by the user is correct."""
+        if hmac.compare_digest(st.session_state["password"], st.secrets["password"]):
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # Don't store the password.
+        else:
+            st.session_state["password_correct"] = False
+
+    # Return True if the password is validated.
+    if st.session_state.get("password_correct", False):
+        return True
+
+    # Show input for password.
+    st.text_input(
+        "Password", type="password", on_change=password_entered, key="password"
+    )
+    if "password_correct" in st.session_state:
+        st.error("😕 Password incorrect")
+    return False
+
+
+if not check_password():
+    st.stop()  # Do not continue if check_password is not True.
+
 # Disclaimer 
 with st.expander("Disclaimer", expanded=True):
     st.write("""
@@ -36,9 +67,7 @@ Always consult with qualified professionals for accurate and personalized advice
 
 """)
 
-about_tab, methodology_tab = st.tabs(["About Us", "Methodology"])
-
-with about_tab:
+with st.expander("About Us", expanded=False):    
     st.header("About Us")
     st.markdown("""
    
@@ -121,7 +150,7 @@ Some additional user friendly features are:
 """)
 
 
-with methodology_tab:
+with st.expander("Methodology", expanded=False):
     st.header("Method Writeup")
     st.markdown("""
 
