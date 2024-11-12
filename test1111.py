@@ -23,7 +23,7 @@ st.set_page_config(page_title="SOPhia", page_icon="🤵‍♀️")
 st.title("📄 SOP handling intelligent agent 🤵‍♀️")
 
 # Predefined directory to load PDF files
-PREDEFINED_DIRECTORY = "/Users/aidenzf/Documents/GitHub/document-qa-test/combined"  # Replace with the actual path
+PREDEFINED_DIRECTORY =os.path.join(os.getcwd(), "combined")# Replace with the actual path
 # Disclaimer 
 with st.expander("Disclaimer", expanded=True):
     st.write("""
