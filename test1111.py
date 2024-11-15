@@ -3,7 +3,6 @@ import re
 import streamlit as st
 import openai
 import PyPDF2
-import hmac
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -53,8 +52,179 @@ def check_password():
 if not check_password():
     st.stop()  # Do not continue if check_password is not True.
 
-# Disclaimer 
-with st.expander("Disclaimer", expanded=True):
+# Initialize session state
+if 'vectorstore' not in st.session_state:
+    st.session_state['vectorstore'] = None
+
+if 'documents_uploaded' not in st.session_state:
+    st.session_state['documents_uploaded'] = False
+
+if 'query_history' not in st.session_state:
+    st.session_state['query_history'] = []
+
+# Initialize embeddings
+embeddings = OpenAIEmbeddings(openai_api_key=api_key)
+
+# Sidebar navigation
+st.sidebar.title("Navigation")
+selected_section = st.sidebar.radio("Go to:", ["Welcome", "About Us", "Disclaimer", "Methodology", "SOPHIA Chat"])
+
+# Helper Functions
+def preprocess_text(text):
+    return re.sub(r'\s+', ' ', re.sub(r'\n+', ' ', text)).strip()
+
+def extract_text_from_pdf(file_path):
+    try:
+        text = ""
+        pdf_reader = PyPDF2.PdfReader(file_path)
+        for page in pdf_reader.pages:
+            text += page.extract_text() + "\n"
+        return preprocess_text(text)
+    except Exception as e:
+        st.error(f"Error extracting text from {os.path.basename(file_path)}: {e}")
+        return ""
+
+def process_directory(directory):
+    documents_to_add = []
+    pdf_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.lower().endswith('.pdf')]
+
+    if not pdf_files:
+        st.error("No PDF files found in the directory.")
+        return
+
+    st.info(f"📂 Found {len(pdf_files)} PDF files. Processing...")
+    for file_path in pdf_files:
+        text = extract_text_from_pdf(file_path)
+        if text:
+            documents_to_add.append({"text": text, "source": os.path.basename(file_path)})
+
+    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+    chunks = [
+        {"text": chunk, "source": doc["source"]}
+        for doc in documents_to_add
+        for chunk in text_splitter.split_text(doc["text"])
+    ]
+
+    docs = [Document(page_content=chunk["text"], metadata={"source": chunk["source"]}) for chunk in chunks]
+
+    if st.session_state['vectorstore'] is None:
+        st.session_state['vectorstore'] = FAISS.from_documents(docs, embeddings)
+    else:
+        st.session_state['vectorstore'].add_documents(docs)
+
+    st.session_state['vectorstore'].save_local(FAISS_INDEX_PATH)
+    st.session_state['documents_uploaded'] = True
+    st.success("🎉 Knowledge base created successfully!")
+
+# Automatically build the vector store if not already built
+if st.session_state['vectorstore'] is None:
+    process_directory(PREDEFINED_DIRECTORY)
+
+# Section Logic
+    if selected_section == "Welcome":
+        st.markdown("### Welcome to SOPhia 🤵‍♀️")
+        # Add your Welcome content here
+        st.markdown("""
+        ### 🌟 **Welcome to SOPhia (SOP handling intelligent agent)🤵‍♀️!**
+
+        This application leverages **LangChain** and **OpenAI's** powerful language models to provide an interactive question-and-answer interface based on your uploaded documents.
+
+#### **Key Features:**
+- **📁 Upload Multiple Documents**: Support for PDF and TXT files.
+- **🔍 Intelligent Search**: Quickly find relevant information within your documents.
+- **📑 Detailed Sources**: Answers come with references to the specific document sections.
+- **⚡ Fast and Efficient**: Optimized for quick processing and responses.
+
+#### **Getting Started:**
+1. **Upload Documents**:
+   - Click on the sidebar's "Upload Documents" section.
+   - Select and upload your PDF or TXT files.
+2. **Process Documents**:
+   - After uploading, click on "Start Upload and Processing".
+   - Wait for the progress bar to complete the processing.
+3. **Ask Questions**:
+   - Once processing is done, the question input box will appear after app is rerun.
+   - Enter your query and receive detailed answers.
+4. **Review History**:
+   - Access your query history in the "Query History" tab to revisit past interactions.
+
+#### **Why Use This App?**
+- **Efficiency**: Save time by extracting information without manually searching through documents.
+- **Accuracy**: Get precise answers backed by the content of your documents.
+- **Transparency**: Always know the source of the information provided.
+
+#### **Note:**
+- Ensure your `.env` file is properly configured with your OpenAI API key.
+- Uploaded documents are securely stored and processed locally.
+
+🔒 **Your data privacy is our priority!**
+""")
+
+elif selected_section == "About Us":
+    st.header("About Us")
+    # Add your About Us content here
+    st.markdown("""
+
+    ### System Architecture
+
+    1. User Interface (UI): Streamlit is utilized to create an interactive web interface, allowing users to upload documents, query SOPs, and view query history.
+    2. Data Storage: An SQLite database serves as the primary datastore for storing document content and metadata, ensuring efficient retrieval and management of documents.
+    3. Vector Store: FAISS (Facebook AI Similarity Search) is employed for high-performance similarity search and document retrieval, enabling quick responses to user queries.
+    4. Natural Language Processing: The system integrates OpenAI's language models via Langchain, providing the capability to understand and generate human-like responses based on the uploaded SOPs.
+
+    ### Workflow Overview
+    
+    1. Environment Setup:
+
+        - Environment variables are loaded to retrieve the OpenAI API key securely.
+        - Initial session states are established to manage user interactions and data flow.
+                
+    2. Document Upload and Processing:
+
+        - Users can upload documents in TXT and PDF formats through a file uploader component.
+        - Uploaded documents are validated for their type before processing.
+        - Text extraction occurs from the documents, particularly from PDF files using PyPDF2. The text is then preprocessed to remove excessive whitespace and ensure a clean format.
+        
+    3. Database Interaction:
+
+        - A singleton SQLite connection is established to handle document storage.
+        - Each document's content is added to the database if it does not already exist, ensuring unique entries.
+        - Document metadata, including source and section information, is stored alongside the content.
+        
+    4. Vector Store Initialization:
+
+        - A FAISS vector store is initialized either by loading an existing index or creating a new one if no prior index is found.
+        - OpenAI embeddings are used to convert document texts into vector representations for efficient similarity searching.
+        
+    5. Document Processing:
+
+        - Upon successful upload, the system processes the documents by splitting the content into manageable chunks using RecursiveCharacterTextSplitter.
+        - The processed documents are added to the FAISS vector store, enabling fast retrieval based on user queries.
+        
+    6. Query Handling:
+
+        - Once documents are processed, users can submit queries through the UI.
+        - A custom prompt template guides the language model to generate structured, context-aware responses.
+        - The system employs a RetrievalQA chain that combines the language model with the vector store, ensuring answers are derived from the content of the SOPs.
+        
+    7. Response Generation:
+
+        - User queries are processed by the QA chain, which retrieves relevant documents and generates answers while adhering to specified guidelines for citation and response structure.
+        
+    8. Query History and Session Management:
+
+        - The application maintains a history of queries and responses for user reference, allowing users to review previous interactions.
+        - Users can reset the knowledge base and query history via the UI.
+
+    _____________________________________________________________________
+
+    """)
+
+
+
+elif selected_section == "Disclaimer":
+    st.header("Disclaimer")
+    # Add your Disclaimer content here
     st.write("""
 
 IMPORTANT NOTICE: This web application is developed as a proof-of-concept prototype. The information provided here is NOT intended for actual usage and should not be relied upon for making any decisions, especially those related to financial, legal, or healthcare matters.
@@ -65,8 +235,9 @@ Always consult with qualified professionals for accurate and personalized advice
 
 """)
 
-with st.expander("About Us", expanded=False):    
-    st.header("About Us")
+elif selected_section == "Methodology":
+    st.header("Methodology")
+    # Add your Methodology content here
     st.markdown("""
    
 ### Project Scope
@@ -148,231 +319,66 @@ Some additional user friendly features are:
 """)
 
 
-with st.expander("Methodology", expanded=False):
-    st.header("Method Writeup")
-    st.markdown("""
+elif selected_section == "SOPHIA Chat":
+    st.header("Chat with Sophia here!")
+    query_tab, history_tab = st.tabs(["Chat", "History"])
 
-    ### System Architecture
+    if st.session_state['documents_uploaded']:
+        with query_tab:
+            st.subheader("🗨️ Ask a Question:")
+            query = st.text_input("Enter your query:", placeholder="What information are you looking for?")
+            search_button = st.button("Search")
 
-    1. User Interface (UI): Streamlit is utilized to create an interactive web interface, allowing users to upload documents, query SOPs, and view query history.
-    2. Data Storage: An SQLite database serves as the primary datastore for storing document content and metadata, ensuring efficient retrieval and management of documents.
-    3. Vector Store: FAISS (Facebook AI Similarity Search) is employed for high-performance similarity search and document retrieval, enabling quick responses to user queries.
-    4. Natural Language Processing: The system integrates OpenAI's language models via Langchain, providing the capability to understand and generate human-like responses based on the uploaded SOPs.
+            if search_button and query.strip():
+                try:
+                    custom_prompt = """
+                    You are an expert assistant that provides highly structured and detailed step-by-step instructions based only on the provided documents (SOPs). Each step you provide must be clearly derived from the content and must cite the section and the source document from where it was taken. If the query cannot be answered from the documents, reply with: 'I do not know based on the provided SOPs.' and ask for clarification.
+                    1. You must directly perform all instructions with reference to the appropriate sections of the knowledge base
+                    2. You must only refer to sections of the knowledge base which is relevant to your task.
+                    3. You must always review your output to determine if the facts are consistent with the knowledge base
+                    4. Do not do math calculations and just cite the data as it is.
+                    5. Cite text in verbatim as far as possible
+                    6. In your output, retain the keywords and tone from the documents.
+                    7. If the output to the instructions cannot be derived from the knowledge base, strictly only reply “There is no relevant information, please only query about SOP related information”.
+                    Documents: {context}
+                    Question: {question}
+                    Provide your answer in bullet points with citations.
+                    """
+                    prompt_template = PromptTemplate(input_variables=["context", "question"], template=custom_prompt)
+                    llm = OpenAI(temperature=0, openai_api_key=api_key, max_tokens=1000)
+                    qa_chain = load_qa_chain(llm=llm, chain_type="stuff", prompt=prompt_template)
 
-    ### Workflow Overview
-    
-    1. Environment Setup:
+                    retriever = st.session_state['vectorstore'].as_retriever(search_type="similarity", search_kwargs={"k": 5})
+                    qa = RetrievalQA(combine_documents_chain=qa_chain, retriever=retriever)
 
-        - Environment variables are loaded to retrieve the OpenAI API key securely.
-        - Initial session states are established to manage user interactions and data flow.
-                
-    2. Document Upload and Processing:
+                    with st.spinner("🔍 Searching the knowledge base..."):
+                        answer = qa.run(query)
+                        st.session_state.query_history.append({"query": query, "answer": answer})
+                        st.subheader("💡 Answer:")
+                        st.write(answer)
 
-        - Users can upload documents in TXT and PDF formats through a file uploader component.
-        - Uploaded documents are validated for their type before processing.
-        - Text extraction occurs from the documents, particularly from PDF files using PyPDF2. The text is then preprocessed to remove excessive whitespace and ensure a clean format.
-        
-    3. Database Interaction:
-
-        - A singleton SQLite connection is established to handle document storage.
-        - Each document's content is added to the database if it does not already exist, ensuring unique entries.
-        - Document metadata, including source and section information, is stored alongside the content.
-        
-    4. Vector Store Initialization:
-
-        - A FAISS vector store is initialized either by loading an existing index or creating a new one if no prior index is found.
-        - OpenAI embeddings are used to convert document texts into vector representations for efficient similarity searching.
-        
-    5. Document Processing:
-
-        - Upon successful upload, the system processes the documents by splitting the content into manageable chunks using RecursiveCharacterTextSplitter.
-        - The processed documents are added to the FAISS vector store, enabling fast retrieval based on user queries.
-        
-    6. Query Handling:
-
-        - Once documents are processed, users can submit queries through the UI.
-        - A custom prompt template guides the language model to generate structured, context-aware responses.
-        - The system employs a RetrievalQA chain that combines the language model with the vector store, ensuring answers are derived from the content of the SOPs.
-        
-    7. Response Generation:
-
-        - User queries are processed by the QA chain, which retrieves relevant documents and generates answers while adhering to specified guidelines for citation and response structure.
-        
-    8. Query History and Session Management:
-
-        - The application maintains a history of queries and responses for user reference, allowing users to review previous interactions.
-        - Users can reset the knowledge base and query history via the UI.
-
-    _____________________________________________________________________
-
-    """)
-
-st.markdown("""
-### 🌟 **Welcome to SOPhia (SOP handling intelligent agent)🤵‍♀️!**
-
-This application leverages **LangChain** and **OpenAI's** powerful language models to provide an interactive question-and-answer interface based on your uploaded documents.
-
-#### **Key Features:**
-- **📁 Upload Multiple Documents**: Support for PDF and TXT files.
-- **🔍 Intelligent Search**: Quickly find relevant information within your documents.
-- **📑 Detailed Sources**: Answers come with references to the specific document sections.
-- **⚡ Fast and Efficient**: Optimized for quick processing and responses.
-
-#### **Getting Started:**
-1. **Upload Documents**:
-   - Click on the sidebar's "Upload Documents" section.
-   - Select and upload your PDF or TXT files.
-2. **Process Documents**:
-   - After uploading, click on "Start Upload and Processing".
-   - Wait for the progress bar to complete the processing.
-3. **Ask Questions**:
-   - Once processing is done, the question input box will appear after app is rerun.
-   - Enter your query and receive detailed answers.
-4. **Review History**:
-   - Access your query history in the "Query History" tab to revisit past interactions.
-
-#### **Why Use This App?**
-- **Efficiency**: Save time by extracting information without manually searching through documents.
-- **Accuracy**: Get precise answers backed by the content of your documents.
-- **Transparency**: Always know the source of the information provided.
-
-#### **Note:**
-- Ensure your `.env` file is properly configured with your OpenAI API key.
-- Uploaded documents are securely stored and processed locally.
-
-🔒 **Your data privacy is our priority!**
-""")
-
-# Initialize session state
-if 'vectorstore' not in st.session_state:
-    st.session_state['vectorstore'] = None
-
-if 'documents_uploaded' not in st.session_state:
-    st.session_state['documents_uploaded'] = False
-
-# Initialize embeddings
-embeddings = OpenAIEmbeddings(openai_api_key=api_key)
-
-# Define the path for the FAISS index
-FAISS_INDEX_PATH = 'vector_store.faiss'
-
-def preprocess_text(text):
-    """
-    Preprocesses the text by removing excessive whitespace and newlines.
-    """
-    text = re.sub(r'\n+', ' ', text)  # Replace multiple newlines with a space
-    text = re.sub(r'\s+', ' ', text)  # Replace multiple spaces with a single space
-    return text.strip()
-
-def extract_text_from_pdf(file_path):
-    """
-    Extracts text from a PDF file with source metadata.
-    """
-    try:
-        text = ""
-        pdf_reader = PyPDF2.PdfReader(file_path)
-        for page_num in range(len(pdf_reader.pages)):
-            page = pdf_reader.pages[page_num]
-            page_text = page.extract_text()
-            if page_text:
-                text += page_text + "\n"
-            else:
-                st.warning(f"⚠️ No text found on page {page_num + 1} of {os.path.basename(file_path)}.")
-        return preprocess_text(text)
-    except Exception as e:
-        st.error(f"❌ Error extracting text from {os.path.basename(file_path)}: {e}")
-        return ""
-
-def process_directory(directory):
-    """
-    Processes all PDF files in the directory: extracts text and updates the FAISS vector store.
-    """
-    documents_to_add = []
-    pdf_files = [os.path.join(directory, f) for f in os.listdir(directory) if f.lower().endswith('.pdf')]
-
-    if not pdf_files:
-        st.error("❌ No PDF files found in the specified directory.")
-        return
-
-    st.info(f"📂 Found {len(pdf_files)} PDF files. Processing...")
-    for file_path in pdf_files:
-        text = extract_text_from_pdf(file_path)
-        if text:
-            # Add extracted text to documents for vector store processing
-            documents_to_add.append({"text": text, "source": os.path.basename(file_path)})
-
-    # Split documents into chunks for vectorization
-    text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
-    chunks = [
-        {"text": chunk, "source": doc["source"]}
-        for doc in documents_to_add
-        for chunk in text_splitter.split_text(doc["text"])
-    ]
-
-    # Convert chunks to LangChain Document objects
-    docs = [Document(page_content=chunk["text"], metadata={"source": chunk["source"]}) for chunk in chunks]
-
-    # Build or update FAISS vector store
-    if st.session_state['vectorstore'] is None:
-        st.session_state['vectorstore'] = FAISS.from_documents(docs, embeddings)
+                        # Display Relevant Documents
+                        relevant_docs = retriever.get_relevant_documents(query)
+                        if relevant_docs:
+                            st.subheader("📄 Source Documents:")
+                            unique_sources = {}
+                            for doc in relevant_docs:
+                                source = doc.metadata.get('source', "Unknown")
+                                link = doc.metadata.get('link', "#")
+                                if source not in unique_sources:
+                                    unique_sources[source] = link
+                            for source, link in unique_sources.items():
+                                st.markdown(f"- **[{source}]({link})**")
+                        else:
+                            st.info("No relevant documents found.")
+                except Exception as e:
+                    st.error(f"An error occurred: {e}")
+            elif search_button:
+                st.error("❌ Query cannot be empty.")
+        with history_tab:
+            st.subheader("🕒 Query History:")
+            for idx, entry in enumerate(st.session_state.query_history, 1):
+                with st.expander(f"Query {idx}: {entry['query']}"):
+                    st.markdown(f"**Answer:** {entry['answer']}")
     else:
-        st.session_state['vectorstore'].add_documents(docs)
-
-    # Save the updated vector store
-    st.session_state['vectorstore'].save_local(FAISS_INDEX_PATH)
-    st.success("🎉 Knowledge base created and saved successfully!")
-    st.session_state['documents_uploaded'] = True
-
-# Automatically build the vector store if not already built
-if st.session_state['vectorstore'] is None:
-    process_directory(PREDEFINED_DIRECTORY)
-
-# Query Tab
-if st.session_state['documents_uploaded'] and st.session_state['vectorstore']:
-    st.subheader("🗨️ Ask a Question:")
-    query = st.text_input("Enter your query:", placeholder="What information are you looking for?")
-    search_button = st.button("Search")
-
-    if search_button and query.strip():
-        # Create QA chain
-        custom_prompt = """
-        You are an expert assistant that provides detailed step-by-step instructions derived only from the provided documents (SOPs).
-        Each response must include citations of the source document and section.
-        You must directly perform all instructions with reference to the appropriate sections of the knowledge base
-        You must only refer to sections of the knowledge base which is relevant to your task.
-        You must always review your output to determine if the facts are consistent with the knowledge base
-        Do not do math calculations and just cite the data as it is.
-        Cite text in verbatim as far as possible
-        In your output, retain the keywords and tone from the documents.
-        If the output to the instructions cannot be derived from the knowledge base, strictly only reply “There is no relevant information, please only query about SOP related information”.
-        Documents: {context}
-        
-        Question: {question}
-        
-        Provide your answer as a detailed guide with citations.
-        """
-        prompt_template = PromptTemplate(input_variables=["context", "question"], template=custom_prompt)
-        llm = OpenAI(temperature=0, openai_api_key=api_key, max_tokens=1000)
-        qa_chain = load_qa_chain(llm=llm, chain_type="stuff", prompt=prompt_template)
-
-        retriever = st.session_state['vectorstore'].as_retriever(search_type="similarity", search_kwargs={"k": 5})
-        qa = RetrievalQA(combine_documents_chain=qa_chain, retriever=retriever)
-
-        with st.spinner("🔍 Searching the knowledge base..."):
-            try:
-                answer = qa.run(query)
-                st.subheader("💡 Answer:")
-                st.write(answer)
-
-                # Display relevant documents
-                relevant_docs = retriever.get_relevant_documents(query)
-                if relevant_docs:
-                    st.subheader("📄 Source Documents:")
-                    for doc in relevant_docs:
-                        st.write(f"**Source:** {doc.metadata['source']}")
-            except Exception as e:
-                st.error(f"❌ An error occurred: {e}")
-    elif search_button:
-        st.error("❌ Query cannot be empty.")
-else:
-    st.info("📝 Loading knowledge base. Please wait or ensure the directory contains valid PDF files.")
+        st.info("📝 The knowledge base is not ready yet.")
