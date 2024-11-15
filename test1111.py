@@ -4,6 +4,7 @@ import streamlit as st
 import openai
 import PyPDF2
 import hmac
+import tempfile
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
@@ -13,6 +14,8 @@ from langchain_community.llms import OpenAI
 from langchain.prompts import PromptTemplate
 from langchain.chains.question_answering import load_qa_chain
 from dotenv import load_dotenv
+
+FAISS_INDEX_PATH = tempfile.NamedTemporaryFile(suffix=".faiss").name
 
 # Load environment variables from .env file
 load_dotenv(override=True)
