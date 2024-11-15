@@ -3,6 +3,7 @@ import re
 import streamlit as st
 import openai
 import PyPDF2
+import hmac
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_community.embeddings import OpenAIEmbeddings
 from langchain_community.vectorstores import FAISS
