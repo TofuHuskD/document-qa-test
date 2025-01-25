@@ -346,7 +346,7 @@ elif selected_section == "SOPHIA Chat":
                     7. If the output to the instructions cannot be derived from the knowledge base, strictly only reply “There is no relevant information, please only query about SOP related information”.
                     Documents: {context}
                     Question: {question}
-                    Provide your answer in bullet points with citations.
+                    Provide your answer with citations in bullet points.
                     """
                     prompt_template = PromptTemplate(input_variables=["context", "question"], template=custom_prompt)
                     llm = OpenAI(temperature=0, openai_api_key=api_key, max_tokens=1000)
