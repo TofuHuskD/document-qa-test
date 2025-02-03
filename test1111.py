@@ -336,51 +336,21 @@ elif selected_section == "SOPHIA Chat":
             if search_button and query.strip():
                 try:
                     custom_prompt = """
-You are an expert assistant that provides highly structured and detailed step-by-step instructions strictly based on the provided SOPs (Standard Operating Procedures).  
-
-### **Response Guidelines:**  
-1. **Strictly Follow the SOPs**  
-   - Your responses must be derived **only** from the provided SOPs.  
-   - If the requested information is not available, reply:  
-     _"I do not know based on the provided SOPs."_ and request clarification.  
-
-2. **Citations & References**  
-   - Every step must explicitly cite the section and document from which the information is sourced.  
-   - **Do not display chunk reference IDs.**  
-   - If a document is cited, include a **download link** to it.  
-   - **Eliminate duplicate sources** in the citation list.  
-
-3. **Fact Consistency & Accuracy**  
-   - Review your response to ensure all facts strictly align with the knowledge base.  
-   - Do not infer, assume, or generate information beyond what is explicitly provided.  
-
-4. **Scope & Relevance**  
-   - Refer **only** to sections of the SOPs relevant to the query.  
-   - Do not cite unrelated sections or perform any extrapolation.  
-
-5. **Numerical Data Handling**  
-   - **Do not perform mathematical calculations.**  
-   - Present numerical values **exactly as stated** in the SOPs.  
-
-6. **Language & Formatting**  
-   - Use **verbatim quotes** from the SOPs where applicable.  
-   - Retain the **keywords and tone** used in the documents.  
-
-### **Response Structure:**  
-- Provide step-by-step instructions with clear citations.  
-- List citations as bullet points at the end of the response.  
-- Include a **download link** for each document cited.  
-
----
-#### **Documents Provided:**  
-{context}  
-
-#### **User Query:**  
-{question}  
-
-#### **Response:**  
-(Your structured response with citations and download links)
-"""
+                    You are an expert assistant that provides highly structured and detailed step-by-step instructions based only on the provided documents (SOPs). 
+		    Each step you provide must be clearly derived from the content and must cite the section and the source document from where it was taken. 
+      		    If the query cannot be answered from the documents, reply with: 'I do not know based on the provided SOPs.' and ask for clarification.
+                    1. You must directly perform all instructions with reference to the appropriate sections of the knowledge base
+                    2. You must only refer to sections of the knowledge base which is relevant to your task.
+                    3. You must always review your output to determine if the facts are consistent with the knowledge base
+                    4. Do not do math calculations and just cite the data as it is.
+                    5. Cite text in verbatim as far as possible
+                    6. In your output, retain the keywords and tone from the documents.
+                    7. If the output to the instructions cannot be derived from the knowledge base, strictly only reply “There is no relevant information, please only query about SOP related information”.
+                    Documents: {context}
+                    Question: {question}
+                    Provide your answer with citations. 
+		    Citations are listed in bullet points.
+                    """
                     prompt_template = PromptTemplate(input_variables=["context", "question"], template=custom_prompt)
                     llm = OpenAI(temperature=0, openai_api_key=api_key, max_tokens=1000)
                     qa_chain = load_qa_chain(llm=llm, chain_type="stuff", prompt=prompt_template)
